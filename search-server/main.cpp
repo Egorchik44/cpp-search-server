@@ -251,6 +251,166 @@ private:
     }
 };
 
+
+void TestExcludeStopWordsFromAddedDocumentContent() {
+    const int doc_id = 42;
+    const string content = "cat in the city"s;
+    const vector<int> ratings = { 1, 2, 3 };
+    {
+        SearchServer server;
+        server.AddDocument(doc_id, content, DocumentStatus::ACTUAL, ratings);
+        const auto found_docs = server.FindTopDocuments("in"s);
+        ASSERT_EQUAL(found_docs.size(), 1u);
+        const Document& doc0 = found_docs[0];
+        ASSERT_EQUAL(doc0.id, doc_id);
+    }
+
+    {
+        SearchServer server;
+        server.SetStopWords("in the"s);
+        server.AddDocument(doc_id, content, DocumentStatus::ACTUAL, ratings);
+        ASSERT_HINT(server.FindTopDocuments("in"s).empty(),
+            "Stop words must be excluded from documents"s);
+    }
+}
+void TestAddDocument() {
+    const int doc_id = 42;
+    const string content = "cat in the city"s;
+    const vector<int> ratings = { 1, 2, 3 };
+    {
+        SearchServer server;
+        server.AddDocument(doc_id, content, DocumentStatus::ACTUAL, ratings);
+        const auto found_docs = server.FindTopDocuments("cat"s);
+        ASSERT_EQUAL(found_docs.size(), 1);
+        const Document& doc0 = found_docs[0];
+        ASSERT_EQUAL(doc0.id, doc_id);
+        server.AddDocument(33, "cat into door"s, DocumentStatus::ACTUAL, { 2, 3, 4 });
+        const auto found_docs1 = server.FindTopDocuments("cat"s);
+        ASSERT_EQUAL(found_docs1.size(), 2);
+        const Document& doc01 = found_docs1[0];
+        ASSERT_EQUAL(doc01.id, 33);
+    }
+    {
+        SearchServer server;
+        server.SetStopWords("in the"s);
+        server.AddDocument(doc_id, content, DocumentStatus::ACTUAL, ratings);
+        ASSERT_HINT(server.FindTopDocuments("in"s).empty(), "Stop words must be excluded from documents"s);
+    }
+}
+
+void TestMinusWords() {
+    {
+        SearchServer server;
+        server.AddDocument(2, "красная синяя кошка за окном"s, DocumentStatus::ACTUAL, { 1,2,3 });
+        server.AddDocument(34, "красная черная кошка за окном"s, DocumentStatus::ACTUAL, { 1,2,3 });
+        const auto found_docs = server.FindTopDocuments("красная кошка черная"s);
+        ASSERT_EQUAL(found_docs.size(), 2);
+        const Document& doc0 = found_docs[0];
+        ASSERT_EQUAL(doc0.id, 34);
+        const auto found_docs1 = server.FindTopDocuments("красная кошка -черная"s);
+        ASSERT_EQUAL(found_docs1.size(), 1);
+        const Document& doc1 = found_docs1[0];
+        ASSERT_EQUAL(doc1.id, 2);
+    }
+}
+
+void TestMatchDocument() {
+    SearchServer server;
+    server.AddDocument(1, "красный белый синий"s, DocumentStatus::ACTUAL, { 1, 2, 3 });
+    vector<string> found_doc;
+    DocumentStatus status;
+    tie(found_doc, status) = server.MatchDocument("белый синий"s, 1);
+    ASSERT_EQUAL(found_doc.size(), 2);
+    vector<string> found_doc1;
+    DocumentStatus status1;
+    tie(found_doc1, status1) = server.MatchDocument("красный -синий"s, 1);
+    ASSERT_EQUAL(found_doc1.size(), 0);
+    vector<string> found_doc2;
+    DocumentStatus status2;
+    tie(found_doc2, status2) = server.MatchDocument("коричневый кот"s, 1);
+    ASSERT_EQUAL(found_doc2.size(), 0);
+}
+
+void TestSortDocument() {
+    SearchServer server;
+    {
+        server.AddDocument(2, "красный оранжевый белый"s, DocumentStatus::ACTUAL, { 1, 2, 3 });
+        server.AddDocument(1, "красный синий кот"s, DocumentStatus::ACTUAL, { 1, 2, 3 });
+        server.AddDocument(3, "красный оранжевый олигарх"s, DocumentStatus::ACTUAL, { 1, 2, 3 });
+        const auto found_docs = server.FindTopDocuments("красная кот оранжевый"s);
+        const Document& doc0 = found_docs[0];
+        ASSERT_EQUAL(doc0.id,1);
+    }
+    {
+        server.AddDocument(2, "красный синий белый кот"s, DocumentStatus::ACTUAL, { 1, 2, 3 });
+        server.AddDocument(1, "красный синий синий кот"s, DocumentStatus::ACTUAL, { 1, 2, 3 });
+        const auto found_docs = server.FindTopDocuments("красная кот синий"s);
+        const Document& doc0 = found_docs[0];
+        ASSERT_EQUAL(doc0.id, 1);
+    }
+}
+
+void TestRating() {
+    SearchServer server;
+    server.AddDocument(1, "red cat under roof"s, DocumentStatus::ACTUAL, { 1,2,3 });
+    server.AddDocument(2, "black cat is running"s, DocumentStatus::ACTUAL, { 1,2,3,9 });
+    const auto found_docs = server.FindTopDocuments("cat"s);
+    ASSERT_EQUAL(found_docs[0].rating, 3);
+    ASSERT_EQUAL(found_docs[1].rating, 2);
+}
+
+void TestPredicate() {
+    SearchServer server;
+    server.AddDocument(22, "red cat under roof"s, DocumentStatus::ACTUAL, { 1,2,3 });
+    server.AddDocument(23, "black cat is running"s, DocumentStatus::IRRELEVANT, { 1,2,3 });
+    server.AddDocument(24, "black cat in runnings"s, DocumentStatus::BANNED, { 1,2,3 });
+    server.AddDocument(25, "orange cat after runnings"s, DocumentStatus::REMOVED, { 1,2,3 });
+    const auto found_docs = server.FindTopDocuments("cat"s, DocumentStatus::ACTUAL);
+    ASSERT_EQUAL(found_docs.size() , 1);
+    const Document& doc0 = found_docs[0];
+    ASSERT_EQUAL(doc0.id , 22);
+    const auto found_docs1 = server.FindTopDocuments("cat"s, DocumentStatus::IRRELEVANT);
+    ASSERT_EQUAL(found_docs1.size() , 1);
+    const Document& doc01 = found_docs1[0];
+    ASSERT_EQUAL(doc01.id , 23);
+    const auto found_docs2 = server.FindTopDocuments("cat"s, DocumentStatus::BANNED);
+    ASSERT_EQUAL(found_docs2.size() , 1);
+    const Document& doc02 = found_docs2[0];
+    ASSERT_EQUAL(doc02.id , 24);
+    const auto found_docs3 = server.FindTopDocuments("cat"s, DocumentStatus::REMOVED);
+    ASSERT_EQUAL(found_docs3.size() , 1);
+    const Document& doc03 = found_docs3[0];
+    ASSERT_EQUAL(doc03.id , 25);
+}
+
+void TestCorrectRelevance() {
+    SearchServer server;
+    server.AddDocument(22, "house cristall and gold"s, DocumentStatus::ACTUAL, { 1,2,3 });
+    server.AddDocument(23, "car green sky house"s, DocumentStatus::ACTUAL, { 1,2,3 });
+    server.AddDocument(24, "yellow black white house"s, DocumentStatus::ACTUAL, {1,2,3});
+    const auto found_docs = server.FindTopDocuments("cristall house gold"s);
+    double ans1, ans2, ans3;
+    ans1 = 2.0 * log(3.0) * (0.25) + log(1.0) * (0.25);
+    ans2 = log(1.0) * (0.25);
+    ans3 = log(3.0) * (0.25) + log(1.0) * (0.25);
+    ASSERT_EQUAL(found_docs[0].relevance , ans1);
+    ASSERT_EQUAL(found_docs[1].relevance , ans2);
+    const auto found_docs1 = server.FindTopDocuments("house green"s);
+    ASSERT_EQUAL(found_docs1[0].relevance, ans3);
+}
+
+
+
+void TestSearchServer() {
+    RUN_TEST(TestExcludeStopWordsFromAddedDocumentContent);
+    RUN_TEST(TestAddDocument);
+    RUN_TEST(TestMinusWords);
+    RUN_TEST(TestMatchDocument);
+    RUN_TEST(TestRating);
+    RUN_TEST(TestPredicate);
+    RUN_TEST(TestCorrectRelevance);
+}
+
 void PrintDocument(const Document& document) {
     cout << "{ "s
          << "document_id = "s << document.id << ", "s
@@ -259,6 +419,7 @@ void PrintDocument(const Document& document) {
          << " }"s << endl;
 }
 int main() {
+    TestSearchServer()
     SearchServer search_server;
     search_server.SetStopWords("и в на"s);
     search_server.AddDocument(0, "белый кот и модный ошейник"s,        DocumentStatus::ACTUAL, {8, -3});
