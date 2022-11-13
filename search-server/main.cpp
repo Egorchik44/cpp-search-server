@@ -277,6 +277,8 @@ void TestAddDocument() {
     const int doc_id = 42;
     const string content = "cat in the city"s;
     const vector<int> ratings = { 1, 2, 3 };
+    // Сначала убеждаемся, что поиск слова, не входящего в список стоп-слов,
+    // находит нужный документ
     {
         SearchServer server;
         server.AddDocument(doc_id, content, DocumentStatus::ACTUAL, ratings);
@@ -290,6 +292,9 @@ void TestAddDocument() {
         const Document& doc01 = found_docs1[0];
         ASSERT_EQUAL(doc01.id, 33);
     }
+
+    // Затем убеждаемся, что поиск этого же слова, входящего в список стоп-слов,
+    // возвращает пустой результат
     {
         SearchServer server;
         server.SetStopWords("in the"s);
@@ -304,9 +309,9 @@ void TestMinusWords() {
         server.AddDocument(2, "красная синяя кошка за окном"s, DocumentStatus::ACTUAL, { 1,2,3 });
         server.AddDocument(34, "красная черная кошка за окном"s, DocumentStatus::ACTUAL, { 1,2,3 });
         const auto found_docs = server.FindTopDocuments("красная кошка черная"s);
-        ASSERT_EQUAL(found_docs.size(), 2);
         const Document& doc0 = found_docs[0];
         ASSERT_EQUAL(doc0.id, 34);
+        
         const auto found_docs1 = server.FindTopDocuments("красная кошка -черная"s);
         ASSERT_EQUAL(found_docs1.size(), 1);
         const Document& doc1 = found_docs1[0];
@@ -317,49 +322,62 @@ void TestMinusWords() {
 void TestMatchDocument() {
     SearchServer server;
     server.AddDocument(1, "красный белый синий"s, DocumentStatus::ACTUAL, { 1, 2, 3 });
-    vector<string> found_doc;
-    DocumentStatus status;
-    tie(found_doc, status) = server.MatchDocument("белый синий"s, 1);
+    
+    auto [found_doc, status] = server.MatchDocument("белый синий"s, 1);
     ASSERT_EQUAL(found_doc.size(), 2);
-    vector<string> found_doc1;
-    DocumentStatus status1;
-    tie(found_doc1, status1) = server.MatchDocument("красный -синий"s, 1);
+    
+    auto [found_doc1, status1]  = server.MatchDocument("красный -синий"s, 1);
     ASSERT_EQUAL(found_doc1.size(), 0);
-    vector<string> found_doc2;
-    DocumentStatus status2;
-    tie(found_doc2, status2) = server.MatchDocument("коричневый кот"s, 1);
+    
+    auto [found_doc2, status2]  = server.MatchDocument(""s, 1);
     ASSERT_EQUAL(found_doc2.size(), 0);
 }
+
+
+
+
 
 void TestSortDocument() {
     SearchServer server;
     {
-        server.AddDocument(2, "красный оранжевый белый"s, DocumentStatus::ACTUAL, { 1, 2, 3 });
-        server.AddDocument(1, "красный синий кот"s, DocumentStatus::ACTUAL, { 1, 2, 3 });
+        server.AddDocument(1, "красный оранжевый белый"s, DocumentStatus::ACTUAL, { 1, 2, 3 });
+        server.AddDocument(2, "красный синий кот"s, DocumentStatus::ACTUAL, { 1, 2, 3 });
         server.AddDocument(3, "красный оранжевый олигарх"s, DocumentStatus::ACTUAL, { 1, 2, 3 });
-        const auto found_docs = server.FindTopDocuments("красная кот оранжевый"s);
-        const Document& doc0 = found_docs[0];
-        ASSERT_EQUAL(doc0.id,1);
-    }
-    {
-        server.AddDocument(2, "красный синий белый кот"s, DocumentStatus::ACTUAL, { 1, 2, 3 });
-        server.AddDocument(1, "красный синий синий кот"s, DocumentStatus::ACTUAL, { 1, 2, 3 });
-        const auto found_docs = server.FindTopDocuments("красная кот синий"s);
-        const Document& doc0 = found_docs[0];
-        ASSERT_EQUAL(doc0.id, 1);
+        
+        server.AddDocument(4, "красный синий белый кот"s, DocumentStatus::ACTUAL, { 1, 2, 3 });
+        server.AddDocument(5, "красный синий синий кот"s, DocumentStatus::ACTUAL, { 1, 2, 3 });
+        const auto foundDocuments = server.FindTopDocuments("красный синий кот"s);
+        
+    const vector<int> expectedDocumentIds = { 5, 3, 4 };
+ 
+    ASSERT_EQUAL(server.GetDocumentCount(), 5);
+ 
+    ASSERT_EQUAL(foundDocuments.size(), expectedDocumentIds.size());
+ 
+ 
+    bool is_sorted_by_relevance =
+        is_sorted(foundDocuments.begin(), foundDocuments.end(),
+            [](const Document& left, const Document& right) { return left.relevance > right.relevance; });
+ 
+    ASSERT_HINT(is_sorted_by_relevance, "sorted by relevance"s);
     }
 }
+
+
+
+
 
 void TestRating() {
     SearchServer server;
     server.AddDocument(1, "red cat under roof"s, DocumentStatus::ACTUAL, { 1,2,3 });
     server.AddDocument(2, "black cat is running"s, DocumentStatus::ACTUAL, { 1,2,3,9 });
     const auto found_docs = server.FindTopDocuments("cat"s);
-    ASSERT_EQUAL(found_docs[0].rating, 3);
-    ASSERT_EQUAL(found_docs[1].rating, 2);
+    
+    ASSERT_EQUAL(found_docs[0].rating, (1 + 2 + 3 + 9 ) / 4);
+    ASSERT_EQUAL(found_docs[1].rating, (1 + 2 + 3) / 3);
 }
 
-void TestPredicate() {
+void TestStatus() {
     SearchServer server;
     server.AddDocument(22, "red cat under roof"s, DocumentStatus::ACTUAL, { 1,2,3 });
     server.AddDocument(23, "black cat is running"s, DocumentStatus::IRRELEVANT, { 1,2,3 });
@@ -398,25 +416,19 @@ void TestCorrectRelevance() {
     const auto found_docs1 = server.FindTopDocuments("house green"s);
     ASSERT_EQUAL(found_docs1[0].relevance, ans3);
 }
+/*
+Разместите код остальных тестов здесь
+*/
 
-
-
+// Функция TestSearchServer является точкой входа для запуска тестов
 void TestSearchServer() {
     RUN_TEST(TestExcludeStopWordsFromAddedDocumentContent);
     RUN_TEST(TestAddDocument);
     RUN_TEST(TestMinusWords);
     RUN_TEST(TestMatchDocument);
     RUN_TEST(TestRating);
-    RUN_TEST(TestPredicate);
+    RUN_TEST(TestStatus);
     RUN_TEST(TestCorrectRelevance);
-}
-
-void PrintDocument(const Document& document) {
-    cout << "{ "s
-         << "document_id = "s << document.id << ", "s
-         << "relevance = "s << document.relevance << ", "s
-         << "rating = "s << document.rating
-         << " }"s << endl;
 }
 int main() {
     TestSearchServer()
