@@ -251,7 +251,6 @@ private:
     }
 };
 
-
 void TestExcludeStopWordsFromAddedDocumentContent() {
     const int doc_id = 42;
     const string content = "cat in the city"s;
@@ -366,16 +365,52 @@ void TestSortDocument() {
 
 
 
+void TestRating() { 
+    SearchServer server; 
+    server.AddDocument(1, "red cat under roof"s, DocumentStatus::ACTUAL, { 1,2,3 }); 
+    server.AddDocument(2, "black cat is running"s, DocumentStatus::ACTUAL, { 1,2,3,9 }); 
+    const auto found_docs = server.FindTopDocuments("cat"s); 
+    ASSERT_EQUAL(found_docs[0].rating, (1 + 2 + 3 + 9 ) / 4); 
+    ASSERT_EQUAL(found_docs[1].rating, (1 + 2 + 3) / 3); 
+} 
 
-void TestRating() {
+ 
+void TestPredicate() {
+    string text = "red cat under roof";
+    vector<int> rate = { 1,2,3 };
+   map<DocumentStatus, vector<int>> loaded_documents;
     SearchServer server;
-    server.AddDocument(1, "red cat under roof"s, DocumentStatus::ACTUAL, { 1,2,3 });
-    server.AddDocument(2, "black cat is running"s, DocumentStatus::ACTUAL, { 1,2,3,9 });
-    const auto found_docs = server.FindTopDocuments("cat"s);
+    server.AddDocument(1, text, DocumentStatus::BANNED, rate);
+    loaded_documents[DocumentStatus::BANNED].emplace_back(1);
+    server.AddDocument(2, text, DocumentStatus::IRRELEVANT, rate);
+    loaded_documents[DocumentStatus::IRRELEVANT].emplace_back(2);
+    server.AddDocument(3, text, DocumentStatus::ACTUAL, rate);
+    loaded_documents[DocumentStatus::ACTUAL].emplace_back(3);
+    server.AddDocument(4, text, DocumentStatus::IRRELEVANT, rate);
+    loaded_documents[DocumentStatus::IRRELEVANT].emplace_back(4);
+    server.AddDocument(5, text, DocumentStatus::IRRELEVANT, rate);
+    loaded_documents[DocumentStatus::IRRELEVANT].emplace_back(5);
+    server.AddDocument(11, text, DocumentStatus::BANNED, rate);
+    loaded_documents[DocumentStatus::BANNED].emplace_back(11);
+    server.AddDocument(21, text, DocumentStatus::BANNED, rate);
+    loaded_documents[DocumentStatus::BANNED].emplace_back(21);
+    server.AddDocument(31, text, DocumentStatus::BANNED, rate);
+    loaded_documents[DocumentStatus::BANNED].emplace_back(31);
+    server.AddDocument(41, text, DocumentStatus::BANNED, rate);
+    loaded_documents[DocumentStatus::BANNED].emplace_back(41);
+    server.AddDocument(51, text, DocumentStatus::REMOVED, rate);
+    loaded_documents[DocumentStatus::REMOVED].emplace_back(51);
     
-    ASSERT_EQUAL(found_docs[0].rating, (1 + 2 + 3 + 9 ) / 4);
-    ASSERT_EQUAL(found_docs[1].rating, (1 + 2 + 3) / 3);
+    const auto found_docs1 = server.FindTopDocuments(text,DocumentStatus::ACTUAL);
+     ASSERT_EQUAL(found_docs1.size(), loaded_documents[DocumentStatus::ACTUAL].size());
+    const auto found_docs2 = server.FindTopDocuments(text,DocumentStatus::BANNED);
+     ASSERT_EQUAL(found_docs2.size(), loaded_documents[DocumentStatus::BANNED].size());
+    const auto found_docs3 = server.FindTopDocuments(text,DocumentStatus::IRRELEVANT);
+     ASSERT_EQUAL(found_docs3.size(), loaded_documents[DocumentStatus::IRRELEVANT].size());
+    const auto found_docs4 = server.FindTopDocuments(text,DocumentStatus::REMOVED);
+     ASSERT_EQUAL(found_docs4.size(), loaded_documents[DocumentStatus::REMOVED].size());
 }
+
 
 void TestStatus() {
     SearchServer server;
