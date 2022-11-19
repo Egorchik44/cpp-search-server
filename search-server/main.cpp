@@ -342,7 +342,6 @@ void TestSortDocument() {
         server.AddDocument(1, "красный оранжевый белый"s, DocumentStatus::ACTUAL, { 1, 2, 3 });
         server.AddDocument(2, "красный синий кот"s, DocumentStatus::ACTUAL, { 1, 2, 3 });
         server.AddDocument(3, "красный оранжевый олигарх"s, DocumentStatus::ACTUAL, { 1, 2, 3 });
-        
         server.AddDocument(4, "красный синий белый кот"s, DocumentStatus::ACTUAL, { 1, 2, 3 });
         server.AddDocument(5, "красный синий синий кот"s, DocumentStatus::ACTUAL, { 1, 2, 3 });
         const auto foundDocuments = server.FindTopDocuments("красный синий кот"s);
@@ -378,37 +377,30 @@ void TestRating() {
 void TestPredicate() {
     string text = "red cat under roof";
     vector<int> rate = { 1,2,3 };
-   map<DocumentStatus, vector<int>> loaded_documents;
+   
     SearchServer server;
-    server.AddDocument(1, text, DocumentStatus::BANNED, rate);
-    loaded_documents[DocumentStatus::BANNED].emplace_back(1);
-    server.AddDocument(2, text, DocumentStatus::IRRELEVANT, rate);
-    loaded_documents[DocumentStatus::IRRELEVANT].emplace_back(2);
-    server.AddDocument(3, text, DocumentStatus::ACTUAL, rate);
-    loaded_documents[DocumentStatus::ACTUAL].emplace_back(3);
-    server.AddDocument(4, text, DocumentStatus::IRRELEVANT, rate);
-    loaded_documents[DocumentStatus::IRRELEVANT].emplace_back(4);
-    server.AddDocument(5, text, DocumentStatus::IRRELEVANT, rate);
-    loaded_documents[DocumentStatus::IRRELEVANT].emplace_back(5);
-    server.AddDocument(11, text, DocumentStatus::BANNED, rate);
-    loaded_documents[DocumentStatus::BANNED].emplace_back(11);
-    server.AddDocument(21, text, DocumentStatus::BANNED, rate);
-    loaded_documents[DocumentStatus::BANNED].emplace_back(21);
-    server.AddDocument(31, text, DocumentStatus::BANNED, rate);
-    loaded_documents[DocumentStatus::BANNED].emplace_back(31);
-    server.AddDocument(41, text, DocumentStatus::BANNED, rate);
-    loaded_documents[DocumentStatus::BANNED].emplace_back(41);
-    server.AddDocument(51, text, DocumentStatus::REMOVED, rate);
-    loaded_documents[DocumentStatus::REMOVED].emplace_back(51);
     
-    const auto found_docs1 = server.FindTopDocuments(text,DocumentStatus::ACTUAL);
-     ASSERT_EQUAL(found_docs1.size(), loaded_documents[DocumentStatus::ACTUAL].size());
-    const auto found_docs2 = server.FindTopDocuments(text,DocumentStatus::BANNED);
-     ASSERT_EQUAL(found_docs2.size(), loaded_documents[DocumentStatus::BANNED].size());
-    const auto found_docs3 = server.FindTopDocuments(text,DocumentStatus::IRRELEVANT);
-     ASSERT_EQUAL(found_docs3.size(), loaded_documents[DocumentStatus::IRRELEVANT].size());
-    const auto found_docs4 = server.FindTopDocuments(text,DocumentStatus::REMOVED);
-     ASSERT_EQUAL(found_docs4.size(), loaded_documents[DocumentStatus::REMOVED].size());
+    server.AddDocument(0, "white cat and fashionable collar"s,        DocumentStatus::ACTUAL, {8, -3});
+    server.AddDocument(1, "fluffy cat fluffy tail"s,       DocumentStatus::ACTUAL, {7, 2, 7});
+    server.AddDocument(2, "well-groomed dog expressive eyes"s, DocumentStatus::ACTUAL, {5, -12, 2, 1});
+    server.AddDocument(3, "well-groomed starling Eugene"s,         DocumentStatus::REMOVED, {9});
+    
+    
+    const auto found_docs = server.FindTopDocuments(text, [](int document_id, DocumentStatus status, int rating) { return status == DocumentStatus::ACTUAL; });
+    ASSERT_EQUAL(found_docs.size(), 2); 
+    const Document& first_doc = found_docs[0]; //1
+    ASSERT_EQUAL(first_doc.id , 1); 
+    const Document& second_doc = found_docs[1]; //1
+    ASSERT_EQUAL(second_doc.id , 0);     
+        
+        
+    const auto found_docs1 = server.FindTopDocuments(text, [](int document_id, DocumentStatus status, int rating) { return document_id % 2 == 0; });
+    ASSERT_EQUAL(found_docs1.size(), 1);
+    const Document& doc1 = found_docs1[0]; 
+    ASSERT_EQUAL(doc1.id , 0); 
+    
+    
+    
 }
 
 
@@ -462,6 +454,7 @@ void TestSearchServer() {
     RUN_TEST(TestMinusWords);
     RUN_TEST(TestMatchDocument);
     RUN_TEST(TestRating);
+    RUN_TEST(TestPredicate);
     RUN_TEST(TestStatus);
     RUN_TEST(TestCorrectRelevance);
 }
