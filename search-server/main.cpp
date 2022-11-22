@@ -10,7 +10,7 @@
 using namespace std;
 
 const int MAX_RESULT_DOCUMENT_COUNT = 5;
-const float magic_const = 1e-6;
+const double EPSILON = 1e-6;
 string ReadLine() {
     string s;
     getline(cin, s);
@@ -77,24 +77,8 @@ enum class DocumentStatus {
     REMOVED,
 };
 
-static bool IsValidWord(const string& word) {
-        return none_of(word.begin(), word.end(), [](char c) {
-           return c >= '\0' && c < ' ';
-        });
-    }
-
-template <typename T>
-static bool IsValidVect(const T& vec) { 
-    if (!all_of(vec.cbegin(), vec.cend(), IsValidWord)) 
-    {
-        throw invalid_argument("invalid_argument");
-    }
-    return true;
-    }
-
 class SearchServer {
 public:
-    inline static constexpr int INVALID_DOCUMENT_ID = -1;
 
     template <typename StringContainer>
     explicit SearchServer(const StringContainer& stop_words)
@@ -110,12 +94,7 @@ public:
         if (!IsValidWord(document)){                   
             throw invalid_argument("invalid_argument");
         }
-        const vector<string> words = SplitIntoWordsNoStop(document);
-        for (const string& word : words) {
-            if (!IsValidWord(word)){
-                throw invalid_argument("invalid_argument");
-            }
-        }              
+        const vector<string> words = SplitIntoWordsNoStop(document);     
         const double inv_word_count = 1.0 / words.size();
         for (const string& word : words) {
              word_to_document_freqs_[word][document_id] += inv_word_count;
@@ -130,36 +109,14 @@ public:
         for (auto word : SplitIntoWords(raw_query)){
             if (!IsStopWord(word)){           
                 break;
-            } else{
+            } else {
                 continue;
             }  
         }
         const Query query = ParseQuery(raw_query);
-        for (string word : query.minus_words){
-            QueryWord query_word = ParseQueryWord(word);
-            if (query_word.is_minus){
-                throw invalid_argument("invalid_argument");
-            }
-            if (query_word.data.empty()){
-                throw invalid_argument("invalid_argument");
-            }
-            if (query_word.data[0] == '-'){  
-                throw invalid_argument("invalid_argument");
-            }
-            if (!IsValidWord(word)){ 
-                throw invalid_argument("invalid_argument");
-            }
-        }
-        if (!query.plus_words.empty()){
-            for (string word : query.plus_words){
-                if (!IsValidWord(word)){            
-                    throw invalid_argument("invalid_argument");
-                }
-            }
-        } 
         auto matched_documents = FindAllDocuments(query, document_predicate);
         sort(matched_documents.begin(), matched_documents.end(), [](const Document& lhs, const Document& rhs) {
-            if (abs(lhs.relevance - rhs.relevance) < magic_const) {
+            if (abs(lhs.relevance - rhs.relevance) < EPSILON) {
                 return lhs.rating > rhs.rating;
             } else {
                 return lhs.relevance > rhs.relevance;
@@ -190,7 +147,7 @@ public:
         if(index>docs_id_list_.size()){
             throw out_of_range("out_of_range");
         }
-        return SearchServer::INVALID_DOCUMENT_ID;
+        return 0;
     }
     
     explicit SearchServer(const string& stop_words_text)
@@ -206,35 +163,10 @@ public:
     }
 
     tuple<vector<string>, DocumentStatus> MatchDocument(const string& raw_query, int document_id) const {
-        if(!raw_query.empty()){
-            if(raw_query[raw_query.size()-1]=='-'){
-                throw invalid_argument("invalid_argument"); 
-            }        
-        }
         if (!(documents_.count(document_id) > 0)) {
             throw invalid_argument("invalid_argument");
         }
-        for (auto word : SplitIntoWords(raw_query)){
-            if (!IsValidWord(word)){
-                throw invalid_argument("invalid_argument");
-            }
-        }
         Query query = ParseQuery(raw_query);
-         if (!query.minus_words.empty()){
-            for (string word : query.minus_words){
-                QueryWord query_word = ParseQueryWord(word);
-                if (query_word.is_minus ){
-                   throw invalid_argument("invalid_argument");
-                }
-                if (query_word.data[0] == '-'){
-                    throw invalid_argument("invalid_argument");
-                }
-                if (!IsValidWord(word)){
-                    throw invalid_argument("invalid_argument");
-                }
-            }
-        }
-        
         vector<string> matched_words;
         for (const string& word : query.plus_words) {
             if (word_to_document_freqs_.count(word) == 0) {
@@ -244,7 +176,6 @@ public:
                 matched_words.push_back(word);
             }
         }
-        
         for (const string& word : query.minus_words) {
             if (word_to_document_freqs_.count(word) == 0) {
                 continue;
@@ -255,7 +186,7 @@ public:
             }
         }
        return  tie(matched_words, documents_.at(document_id).status );
-        }
+    }
 
 private:
     struct DocumentData {
@@ -272,9 +203,27 @@ private:
         return stop_words_.count(word) > 0;
     }
 
+    static bool IsValidWord(const string& word) {
+        return none_of(word.begin(), word.end(), [](char c) {
+           return c >= '\0' && c < ' ';
+        });
+    }
+
+    template <typename T>
+    static bool IsValidVect(const T& vec) { 
+    if (!all_of(vec.cbegin(), vec.cend(), IsValidWord)) 
+    {
+        throw invalid_argument("invalid_argument");
+    }
+    return true;
+    }
+    
     vector<string> SplitIntoWordsNoStop(const string& text) const {
         vector<string> words;
         for (const string& word : SplitIntoWords(text)) {
+            if (!IsValidWord(word)){
+                throw invalid_argument("invalid_argument");
+            }
             if (!IsStopWord(word)) {
                 words.push_back(word);
             }
@@ -301,7 +250,12 @@ private:
 
     QueryWord ParseQueryWord(string text) const {
         bool is_minus = false;
-        
+        if((text[text.size()-1]=='-'||text[1]=='-')){
+                throw invalid_argument("invalid_argument"); 
+            }
+        if (!IsValidWord(text)){            
+                    throw invalid_argument("invalid_argument");
+                }
         // Word shouldn't be empty
         if (text[0] == '-') {
             is_minus = true;
@@ -330,7 +284,6 @@ private:
                 }
             }
         }
-        
         return query;
     }
 
