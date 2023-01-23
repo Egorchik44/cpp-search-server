@@ -11,12 +11,6 @@
 #include <utility>
 #include <vector>
 #include <deque>
-
-
-
-
-    
-
     
 
 SearchServer::SearchServer(const std::string& stop_words_text)
