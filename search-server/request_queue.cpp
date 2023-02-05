@@ -1,5 +1,6 @@
 #include <vector>
 #include <string>
+#include <map>
 #include "request_queue.h"
 
 RequestQueue::RequestQueue(const SearchServer& search_server)
@@ -42,6 +43,3 @@ void RequestQueue::AddRequest(int results_num) {
         ++no_results_requests_;
     }
  }
-
-
-    

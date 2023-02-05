@@ -2,6 +2,7 @@
 #include <vector>
 #include <string>
 #include <deque>
+#include <map>
 #include <iostream>
 #include "search_server.h"
 
