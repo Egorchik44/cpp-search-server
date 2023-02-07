@@ -1,30 +1,31 @@
 #include "remove_duplicates.h"
 #include "document.h"
+#include "log_duration.h"
 #include <algorithm>
 #include <iostream>
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
-
 void RemoveDuplicates(SearchServer& search_server) {
-  map<int, vector<string>>  remove_;
+  map<set<string>, int>  remove_;
+  set<int> deleted_;
   for (auto document_id = search_server.begin(); document_id != search_server.end(); document_id++){
-    vector<string> words_;
+    set<string> words_;
     auto lots_of_words_ = search_server.GetWordFrequencies(*document_id);
     for (auto iterator = lots_of_words_.begin(); iterator != lots_of_words_.end(); iterator++){
-    	words_.push_back(iterator->first);
+    	words_.insert(iterator->first);
     }
-    remove_.insert({*document_id, words_});
-  }
-  for (auto pos_outer = remove_.begin(); pos_outer != remove_.end(); pos_outer++){
-    for (auto pos_inner = ++remove_.begin(); pos_inner != remove_.end(); pos_inner++){
-    	if((pos_outer->second) == (pos_inner->second) && pos_outer->first != pos_inner->first) {
-    	    cout << "Found duplicate document id " << pos_inner->first << endl;
-    	    search_server.RemoveDocument(pos_inner->first);
-       	    remove_.erase(pos_inner);
-    	}
+    if(remove_.count(words_)){
+    	deleted_.insert(*document_id);
+    }else{
+    	remove_.insert({words_, *document_id});
     }
   }
-}
 
+  for(auto id : deleted_){
+          cout << "Found duplicate document id " << id << endl;
+          search_server.RemoveDocument(id);
+      }
+}
