@@ -52,8 +52,7 @@ public:
     std::tuple<std::vector<std::string>, DocumentStatus> MatchDocument(const std::string& raw_query,
                                                                        int document_id) const;
     
-    std::vector<int> GetDocument_ids(){ return document_ids_;}
-    
+
     void RemoveDocument(int document_id);
 
     void RemoveDuplicates(SearchServer& search_server);
